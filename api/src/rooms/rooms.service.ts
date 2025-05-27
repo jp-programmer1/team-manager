@@ -43,6 +43,7 @@ export class RoomsService {
     };
 
     room.users.push(user);
+    
     return room;
   }
 
