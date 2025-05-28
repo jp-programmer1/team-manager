@@ -26,4 +26,14 @@ export const api = {
     });
     return response.json();
   },
+
+  getRoom: async (roomId: string) => {
+    const response = await fetch(`${API_URL}/rooms/${roomId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    return response.json();
+  }
 };

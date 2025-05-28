@@ -1,58 +1,178 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState, useCallback } from "react";
+import {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  type FormEvent,
+} from "react";
 import { api, socket } from "../services/api";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
-import { Users, Eye, EyeOff, RotateCcw, Coffee, Clock, CheckCircle, Circle } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import {
+  Users,
+  Eye,
+  EyeOff,
+  RotateCcw,
+  Coffee,
+  Clock,
+  CheckCircle,
+  Circle,
+} from "lucide-react";
 import type { User } from "@/types/user.type";
+import { DialogNewUser } from "@/components/dialog-new-user";
 
-const fibonacciCards = ["0", "1", "2", "3", "5", "8", "13"]
-const votesRevealed = false
+const fibonacciCards = ["1", "2", "3", "5", "8", "13"];
 
 export const RoomPage = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const [users, setUsers] = useState<Array<User>>([]);
   const [isOpen, setIsOpen] = useState(false);
-  const [username, setUsername] = useState(localStorage.getItem("username") || "");
-  const [selectedCard, setSelectedCard] = useState();
+  const [username, setUsername] = useState(
+    localStorage.getItem("username") || ""
+  );
+  const [selectedCard, setSelectedCard] = useState<string | null>("");
+  const [votes, setVotes] = useState<
+    { data: string[]; sum: number } | undefined
+  >();
+  const [ownerId, setOwnerId] = useState();
+  const userId = localStorage.getItem("userId");
 
   const onOpen = useCallback(() => setIsOpen(true), []);
   const onClose = useCallback(() => setIsOpen(false), []);
+
+  const onSelectedCard = useCallback(
+    (value: string) => {
+      setSelectedCard(value);
+      socket.emit("vote", { roomId, userId, vote: value });
+    },
+    [userId, roomId]
+  );
+
+  useEffect(() => {
+    if (users.length === 0) return;
+
+    const searchUser = users.find((user) => user.id === userId);
+    if (!username || !searchUser) {
+      onOpen();
+    }
+  }, [userId, onOpen, username, users]);
 
   useEffect(() => {
     if (!roomId) {
       navigate("/");
       return;
     }
-    if (!username) onOpen();
-    
+
+    const getRoom = async () => {
+      const response = await api.getRoom(roomId);
+      const findUser = response.users.find(
+        (user: { id: string | null }) => user.id === userId
+      );
+      console.log("findUser", findUser);
+      if (findUser && findUser.vote) {
+        setSelectedCard(findUser.vote);
+      }
+      setOwnerId(response.ownerId);
+    };
+    getRoom();
     socket.emit("joinRoom", { roomId });
-  }, [roomId, username, onOpen, navigate]);
+  }, [roomId, username, navigate, userId]);
 
   useEffect(() => {
     socket.on("userJoined", (userList) => {
-      setUsers(userList.map((user: User) => ({...user, avatar: "/placeholder.svg?height=40&width=40" })));
+      setUsers(
+        userList.map((user: User) => ({
+          ...user,
+          avatar: "/placeholder.svg?height=40&width=40",
+        }))
+      );
+    });
+
+    socket.on("userVoted", (vote) => {
+      setUsers((current) => {
+        return current.map((c) => {
+          if (c.id === vote.userId) {
+            c.voted = vote.hasVoted;
+          }
+          return c;
+        });
+      });
+    });
+
+    socket.on("votesRevealed", (res) => {
+      const data = res.users
+        .filter((r: { vote: string }) => r.vote !== "120")
+        ?.map((r: { vote: unknown }) => r.vote);
+      const sum = data.reduce(
+        (acc: number, vote: string) => acc + Number(vote),
+        0
+      );
+      setVotes({
+        data,
+        sum: Number.isNaN(sum / data.length)
+          ? 0
+          : Number((sum / data.length).toFixed(2)),
+      });
+    });
+
+    socket.on("votesReset", () => {
+      setSelectedCard(null);
+      setVotes(undefined);
+      setUsers((current) => {
+        return current.map((c) => {
+          c.voted = false;
+          return c;
+        });
+      });
     });
 
     return () => {
       socket.off("userJoined");
+      socket.off("userVoted");
+      socket.off("votesRevealed");
+      socket.off("votesReset");
     };
-  }, [roomId, navigate, username, onOpen]);
+  }, [roomId, navigate, username]);
 
-  const onFinished = useCallback(async (newUsername: string) => {
-    if (roomId && newUsername){
-      localStorage.setItem('username', newUsername);
-      setUsername(newUsername);
-      await api.joinRoom(roomId, newUsername);
-      onClose();
+  const onFinished = useCallback(
+    async (newUsername: string) => {
+      if (roomId && newUsername) {
+        setUsername(newUsername);
+        const response = await api.joinRoom(roomId, newUsername);
+        localStorage.setItem("userId", response.userId);
+        localStorage.setItem("username", newUsername);
+        onClose();
+      }
+    },
+    [roomId, onClose]
+  );
+
+  const isOwner = useMemo(() => {
+    return userId === ownerId;
+  }, [ownerId, userId]);
+
+  const onRevealed = useCallback(() => {
+    if (votes) {
+      setVotes(undefined);
+      return;
     }
-  }, [roomId, onClose]);
+    socket.emit("revealVotes", { roomId });
+  }, [votes, roomId]);
+
+  const onResetVotes = useCallback(
+    (e: FormEvent) => {
+      e.preventDefault();
+      console.log("ola");
+
+      socket.emit("resetVotes", { roomId });
+    },
+    [roomId]
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -61,8 +181,12 @@ export const RoomPage = () => {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Sala de Planning Poker</h1>
-              <p className="text-gray-600">Sprint 24 - Estimación de historias</p>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Sala de Planning Poker
+              </h1>
+              <p className="text-gray-600">
+                Sprint ....
+              </p>
             </div>
             <div className="flex items-center gap-4">
               <Badge variant="secondary" className="flex items-center gap-2">
@@ -87,7 +211,8 @@ export const RoomPage = () => {
                   Selecciona tu estimación
                   {selectedCard && (
                     <Badge variant="secondary">
-                      Seleccionada: {selectedCard === "120" ? "Pasar Turno" : selectedCard}
+                      Seleccionada:{" "}
+                      {selectedCard === "120" ? "Pasar Turno" : selectedCard}
                     </Badge>
                   )}
                 </CardTitle>
@@ -98,11 +223,11 @@ export const RoomPage = () => {
                     <Button
                       key={card}
                       variant={selectedCard === card ? "default" : "outline"}
-                      // className={`aspect-[3/4] text-lg font-bold`}
+                      disabled={Boolean(votes)}
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        setSelectedCard(card);
+                        onSelectedCard(card);
                       }}
                     >
                       {card}
@@ -115,14 +240,47 @@ export const RoomPage = () => {
                     <Coffee className="w-4 h-4" />
                     Necesito un break
                   </Button>
-                  <Button variant={selectedCard === '120' ? 'default' : 'outline'} onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setSelectedCard("120");
-                  }}>Pasar turno</Button>
+                  <Button
+                    variant={selectedCard === "120" ? "default" : "outline"}
+                    disabled={Boolean(votes)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onSelectedCard("120");
+                    }}
+                  >
+                    Pasar turno
+                  </Button>
                 </div>
               </CardContent>
             </Card>
+            {/* Resultados (cuando se revelan) */}
+            {votes && (
+              <Card className="mt-5">
+                <CardHeader>
+                  <CardTitle>Resultados</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Promedio:</span>
+                      <Badge variant="default">{votes.sum}</Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Consenso:</span>
+                      <Badge variant="secondary">
+                        {votes.data.every((v) => v === votes.data[0])
+                          ? "Sí"
+                          : "No"}
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-2">
+                      Votos: {votes.data.join(", ")}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Panel lateral */}
@@ -138,9 +296,15 @@ export const RoomPage = () => {
               <CardContent>
                 <div className="space-y-3">
                   {users.map((participant) => (
-                    <div key={participant.id} className="flex items-center gap-3">
+                    <div
+                      key={participant.id}
+                      className="flex items-center gap-3"
+                    >
                       <Avatar className="w-8 h-8">
-                        <AvatarImage src={participant.avatar || "/placeholder.svg"} alt={participant.username} />
+                        <AvatarImage
+                          src={participant.avatar || "/placeholder.svg"}
+                          alt={participant.username}
+                        />
                         <AvatarFallback>
                           {participant.username
                             .split(" ")
@@ -149,7 +313,9 @@ export const RoomPage = () => {
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{participant.username}</p>
+                        <p className="text-sm font-medium truncate">
+                          {participant.username}
+                        </p>
                       </div>
                       <div className="flex items-center gap-1">
                         {participant.voted ? (
@@ -170,8 +336,18 @@ export const RoomPage = () => {
                 <CardTitle>Controles</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button className="w-full flex items-center gap-2" variant={votesRevealed ? "secondary" : "default"}>
-                  {votesRevealed ? (
+                <Button
+                  disabled={!isOwner}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    onRevealed();
+                  }}
+                  className="w-full flex items-center gap-2"
+                  variant={votes ? "secondary" : "default"}
+                >
+                  {votes ? (
                     <>
                       <EyeOff className="w-4 h-4" />
                       Ocultar votos
@@ -184,7 +360,12 @@ export const RoomPage = () => {
                   )}
                 </Button>
 
-                <Button variant="outline" className="w-full flex items-center gap-2">
+                <Button
+                  disabled={!isOwner}
+                  variant="outline"
+                  className="w-full flex items-center gap-2"
+                  onClick={onResetVotes}
+                >
                   <RotateCcw className="w-4 h-4" />
                   Nueva ronda
                 </Button>
@@ -192,86 +373,23 @@ export const RoomPage = () => {
                 <Separator />
 
                 <div className="text-center">
-                  <p className="text-sm text-gray-600 mb-2">Progreso de votación</p>
+                  <p className="text-sm text-gray-600 mb-2">
+                    Progreso de votación
+                  </p>
                   <div className="text-2xl font-bold text-blue-600">
                     {users.filter((p) => p.voted).length}/{users.length}
                   </div>
                 </div>
               </CardContent>
             </Card>
-
-            {/* Resultados (cuando se revelan) */}
-            {votesRevealed && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Resultados</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm">Promedio:</span>
-                      <Badge variant="default">6.5</Badge>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm">Consenso:</span>
-                      <Badge variant="secondary">No</Badge>
-                    </div>
-                    <div className="text-xs text-gray-500 mt-2">Votos: 5, 8, 5, 8</div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </div>
         </div>
       </div>
-      <DialogNewUser isOpen={isOpen} onClose={onClose} onFinished={onFinished} />
+      <DialogNewUser
+        isOpen={isOpen}
+        onClose={onClose}
+        onFinished={onFinished}
+      />
     </div>
-  )
-};
-
-interface DialogNewUserProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onFinished: (username: string) => void;
-}
-
-export const DialogNewUser = ({ isOpen, onClose, onFinished }: DialogNewUserProps) => {
-  const navigate = useNavigate();
-  const [userName, setUserName] = useState(
-    localStorage.getItem("username") || ""
-  );
-
-  const onCloseModal = () => {
-    navigate("/");
-    onClose();
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Tu nombre 👀</DialogTitle>
-        </DialogHeader>
-        
-        <form onSubmit={(e) => {
-          e.preventDefault();
-          onFinished(userName);
-        }}>
-          <div className="mt-4 mb-2">
-            <Input
-              placeholder="Ingresa tu nombre"
-              value={userName}
-              onChange={(e) => setUserName(e.target.value)}
-              required
-              className="mt-2"
-            />
-          </div>
-
-          <DialogFooter>
-            <Button type="submit">Aceptar</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 };

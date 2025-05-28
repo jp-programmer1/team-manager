@@ -1,10 +1,9 @@
-import { useCallback, useState, type FormEvent, type FormEventHandler } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '../services/api';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 
 export const HomePage = () => {
   const [roomName, setRoomName] = useState('');
@@ -14,9 +13,10 @@ export const HomePage = () => {
   const handleCreateRoom = useCallback(async (e: FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    localStorage.setItem('username', userName);
     const res = await api.createRoom(roomName, userName);
     if (!res.id) toast.error("No se pudo crear la sala :c")
+    
+    localStorage.setItem('username', userName);
     localStorage.setItem('userId', res.users[0].id);
     navigate(`/room/${res.id}`);
   }, [roomName, userName, navigate]);
