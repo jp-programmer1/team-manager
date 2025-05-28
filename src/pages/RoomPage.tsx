@@ -35,12 +35,13 @@ export const RoomPage = () => {
   const [username, setUsername] = useState(
     localStorage.getItem("username") || ""
   );
+  const [userId, setUserId] = useState(localStorage.getItem("userId") || "")
   const [selectedCard, setSelectedCard] = useState<string | null>("");
   const [votes, setVotes] = useState<
     { data: string[]; sum: number } | undefined
   >();
   const [ownerId, setOwnerId] = useState();
-  const userId = localStorage.getItem("userId");
+  
 
   const onOpen = useCallback(() => setIsOpen(true), []);
   const onClose = useCallback(() => setIsOpen(false), []);
@@ -142,10 +143,12 @@ export const RoomPage = () => {
   const onFinished = useCallback(
     async (newUsername: string) => {
       if (roomId && newUsername) {
-        setUsername(newUsername);
         const response = await api.joinRoom(roomId, newUsername);
         localStorage.setItem("userId", response.userId);
         localStorage.setItem("username", newUsername);
+
+        setUserId(response.userId);
+        setUsername(newUsername);
         onClose();
       }
     },
