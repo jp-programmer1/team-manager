@@ -149,10 +149,10 @@ export const RoomPage = () => {
 
         setUserId(response.userId);
         setUsername(newUsername);
-        onClose();
+        window.location.reload();
       }
     },
-    [roomId, onClose]
+    [roomId]
   );
 
   const isOwner = useMemo(() => {
