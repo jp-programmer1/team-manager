@@ -8,17 +8,24 @@ import { toast } from 'sonner';
 export const HomePage = () => {
   const [roomName, setRoomName] = useState('');
   const [userName, setUserName] = useState(localStorage.getItem('username') || "");
+  const [creating, setCreating] = useState(false);
   const navigate = useNavigate();
 
   const handleCreateRoom = useCallback(async (e: FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setCreating(true);
     const res = await api.createRoom(roomName, userName);
-    if (!res.id) toast.error("No se pudo crear la sala :c")
+    if (!res.id) {
+      toast.error("No se pudo crear la sala :c")
+      setCreating(false);
+      return;
+    }
     
     localStorage.setItem('username', userName);
     localStorage.setItem('userId', res.users[0].id);
     navigate(`/room/${res.id}`);
+    setCreating(false);
   }, [roomName, userName, navigate]);
 
   return (
@@ -53,8 +60,9 @@ export const HomePage = () => {
             className="w-full"
             type="submit"
             onClick={handleCreateRoom}
+            disabled={creating}
           >
-            Crear sala
+            {creating ? "Creando sala..." : "Crear sala"}
           </Button>
         </div>
       </form>
