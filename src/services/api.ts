@@ -9,24 +9,24 @@ export const socket = io(`${API_URL}/poker`, {
 });
 
 export const api = {
-  createRoom: async (roomName: string, username: string) => {
+  createRoom: async (roomName: string, { name, id }: { name: string; id: number }) => {
     const response = await fetch(`${API_URL}/rooms`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ name: roomName, username }),
+      body: JSON.stringify({ name: roomName, username: name, userId: id }),
     });
     return response.json();
   },
   
-  joinRoom: async (roomId: string, username: string) => {
+  joinRoom: async (roomId: string, username: string, userId: number) => {
     const response = await fetch(`${API_URL}/rooms/join`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ username, roomId }),
+      body: JSON.stringify({ username, roomId, userId }),
     });
     return response.json();
   },
@@ -39,5 +39,56 @@ export const api = {
       },
     });
     return response.json();
-  }
+  },
+
+  getIterations: async (accessToken: string, groupId: string | number) => {
+    // URL de la API de GitLab para obtener iteraciones de un grupo
+    // Solo obtenemos las iteraciones abiertas (state=opened)
+    const url = `https://gitlab.com/api/v4/groups/${groupId}/iterations?state=opened`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al obtener las iteraciones');
+      }
+
+      const iterations = await response.json();
+      return iterations;
+    } catch (error) {
+      console.error('Error al obtener iteraciones de GitLab:', error);
+      throw error;
+    }
+  },
+  getIssues: async (accessToken: string, groupId: string | number, iterationId: string) => {
+    const url = `https://gitlab.com/api/v4/groups/${groupId}/issues?iterations=${iterationId}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al obtener las iteraciones');
+      }
+
+      const iterations = await response.json();
+      return iterations;
+    } catch (error) {
+      console.error('Error al obtener iteraciones de GitLab:', error);
+      throw error;
+    }
+  },
 };

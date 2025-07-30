@@ -1,5 +1,5 @@
 export type User = {
-  id: string;
+  id: number;
   username: string;
   avatar?: string;
   voted: boolean;

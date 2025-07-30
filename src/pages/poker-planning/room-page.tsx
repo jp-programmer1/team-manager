@@ -6,7 +6,7 @@ import {
   useMemo,
   type FormEvent,
 } from "react";
-import { api, socket } from "../services/api";
+import { api, socket } from "../../services/api";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,34 +17,30 @@ import {
   Eye,
   EyeOff,
   RotateCcw,
-  Coffee,
-  Clock,
   CheckCircle,
   Circle,
 } from "lucide-react";
 import type { User } from "@/types/user.type";
-import { DialogNewUser } from "@/components/dialog-new-user";
+import { useAuth } from "@/context/auth-context";
+import { ModalGitlabIterations } from "./modal-gitlab-iterations";
+import type { Gitlab, GitlabIssues, GitlabIteration } from "@/types/gitlab.type";
 
 const fibonacciCards = ["1", "2", "3", "5", "8", "13"];
 
 export const RoomPage = () => {
-  const { roomId } = useParams<{ roomId: string }>();
+  const { roomId } = useParams<{ roomId: string; roomName: string }>();
   const navigate = useNavigate();
   const [users, setUsers] = useState<Array<User>>([]);
-  const [isOpen, setIsOpen] = useState(false);
-  const [username, setUsername] = useState(
-    localStorage.getItem("username") || ""
-  );
-  const [userId, setUserId] = useState(localStorage.getItem("userId") || "")
+  const [iteration, setIteration] = useState<Gitlab | null>(null);
   const [selectedCard, setSelectedCard] = useState<string | null>("");
   const [votes, setVotes] = useState<
     { data: string[]; sum: number } | undefined
   >();
   const [ownerId, setOwnerId] = useState();
-  
-
-  const onOpen = useCallback(() => setIsOpen(true), []);
-  const onClose = useCallback(() => setIsOpen(false), []);
+  const [roomName, setRoomName] = useState();  
+  const { user } = useAuth();
+  const userId = user?.id;
+  const username = user?.name;
 
   const onSelectedCard = useCallback(
     (value: string) => {
@@ -55,15 +51,6 @@ export const RoomPage = () => {
   );
 
   useEffect(() => {
-    if (users.length === 0) return;
-
-    const searchUser = users.find((user) => user.id === userId);
-    if (!username || !searchUser) {
-      onOpen();
-    }
-  }, [userId, onOpen, username, users]);
-
-  useEffect(() => {
     if (!roomId) {
       navigate("/");
       return;
@@ -71,13 +58,19 @@ export const RoomPage = () => {
 
     const getRoom = async () => {
       const response = await api.getRoom(roomId);
+      console.log(response);
+      
+      if (response?.error) {
+        navigate("/");
+        return;
+      }
       const findUser = response.users.find(
-        (user: { id: string | null }) => user.id === userId
+        (user: { id: number }) => user.id === userId
       );
-      console.log("findUser", findUser);
       if (findUser && findUser.vote) {
         setSelectedCard(findUser.vote);
       }
+      setRoomName(response.name);
       setOwnerId(response.ownerId);
     };
     getRoom();
@@ -95,6 +88,8 @@ export const RoomPage = () => {
     });
 
     socket.on("userVoted", (vote) => {
+      console.log(vote);
+      
       setUsers((current) => {
         return current.map((c) => {
           if (c.id === vote.userId) {
@@ -132,6 +127,12 @@ export const RoomPage = () => {
       });
     });
 
+    socket.on("updateInformGitlab", (res) => {
+      console.log(res);
+      
+
+    })
+
     return () => {
       socket.off("userJoined");
       socket.off("userVoted");
@@ -139,21 +140,6 @@ export const RoomPage = () => {
       socket.off("votesReset");
     };
   }, [roomId, navigate, username]);
-
-  const onFinished = useCallback(
-    async (newUsername: string) => {
-      if (roomId && newUsername) {
-        const response = await api.joinRoom(roomId, newUsername);
-        localStorage.setItem("userId", response.userId);
-        localStorage.setItem("username", newUsername);
-
-        setUserId(response.userId);
-        setUsername(newUsername);
-        window.location.reload();
-      }
-    },
-    [roomId]
-  );
 
   const isOwner = useMemo(() => {
     return userId === ownerId;
@@ -170,12 +156,26 @@ export const RoomPage = () => {
   const onResetVotes = useCallback(
     (e: FormEvent) => {
       e.preventDefault();
-      console.log("ola");
-
       socket.emit("resetVotes", { roomId });
     },
     [roomId]
   );
+
+  const onFinishedConnectGitlab = useCallback((iteration: GitlabIteration, issues: GitlabIssues[]) => {
+    socket.emit("informGitlab", { 
+      roomId, 
+      iteration, 
+      issues: issues.map(({created_at, description, iid, title, updated_at, web_url, weight}) => ({
+        created_at,
+        description,
+        iid,
+        title,
+        updated_at,
+        web_url,
+        weight,
+      }))
+    });
+  }, [roomId]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -188,17 +188,13 @@ export const RoomPage = () => {
                 Sala de Planning Poker
               </h1>
               <p className="text-gray-600">
-                Sprint ....
+                {roomName}
               </p>
             </div>
             <div className="flex items-center gap-4">
               <Badge variant="secondary" className="flex items-center gap-2">
                 <Users className="w-4 h-4" />
                 {users.length} participantes
-              </Badge>
-              <Badge variant="outline" className="flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                15:30 min
               </Badge>
             </div>
           </div>
@@ -239,10 +235,6 @@ export const RoomPage = () => {
                 </div>
 
                 <div className="flex gap-3 mt-6">
-                  <Button variant="outline" className="flex items-center gap-2">
-                    <Coffee className="w-4 h-4" />
-                    Necesito un break
-                  </Button>
                   <Button
                     variant={selectedCard === "120" ? "default" : "outline"}
                     disabled={Boolean(votes)}
@@ -388,10 +380,27 @@ export const RoomPage = () => {
           </div>
         </div>
       </div>
-      <DialogNewUser
-        isOpen={isOpen}
-        onClose={onClose}
-        onFinished={onFinished}
+      <ModalGitlabIterations 
+        isOpen={!iteration && isOwner}
+        onClose={() => {
+          setIteration({
+            iteration: {
+              id: "",
+              iid: 0,
+              title: "",
+              description: "",
+              start_date: "",
+              due_date: "",
+              state: 0,
+              web_url: "",
+              group_id: 0,
+              created_at: "",
+              updated_at: "",
+            },
+            issues: [],
+          });
+        }}
+        onFinished={onFinishedConnectGitlab}
       />
     </div>
   );
