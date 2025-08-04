@@ -24,7 +24,7 @@ export const ModalGitlabIterations: React.FC<ModalGitlabIterationsProps> = ({
   onFinished,
 }) => {
   const { user } = useAuth();
-  const [groupId, setGroupId] = useState("");
+  const [groupId, setGroupId] = useState<string | null>(localStorage.getItem("groupId"));
   const [selectedIterationId, setSelectedIterationId] = useState<string | null>(
     null
   );
@@ -60,7 +60,7 @@ export const ModalGitlabIterations: React.FC<ModalGitlabIterationsProps> = ({
   }, [user?.accessToken, groupId]);
 
   const onAccept = useCallback(async () => {
-    if (!selectedIterationId) {
+    if (!selectedIterationId || !groupId) {
       return;
     }
     if (!user?.accessToken) {
@@ -76,6 +76,7 @@ export const ModalGitlabIterations: React.FC<ModalGitlabIterationsProps> = ({
       setError("No se encontró la iteración seleccionada");
       return;
     }
+    localStorage.setItem("groupId", groupId);
     onFinished(selectedIteration, issues);
     onClose();
   }, [selectedIterationId, user?.accessToken, groupId, iterations, onClose, onFinished]);
@@ -97,7 +98,7 @@ export const ModalGitlabIterations: React.FC<ModalGitlabIterationsProps> = ({
             <Input
               id="groupId"
               placeholder="Ej: 12345678"
-              value={groupId}
+              value={groupId || ""}
               onChange={(e) => setGroupId(e.target.value)}
               required
               className="w-full"
