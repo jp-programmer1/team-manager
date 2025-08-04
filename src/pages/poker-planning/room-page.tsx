@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, LogOut } from "lucide-react";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { api, socket } from "../../services/api";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -33,7 +33,6 @@ export const RoomPage = () => {
   const navigate = useNavigate();
   const [users, setUsers] = useState<Array<User>>([]);
   const [informGitlab, setInformGitlab] = useState<Gitlab | null>(null);
-  console.log(informGitlab);
   const [selectedCard, setSelectedCard] = useState<string | null>("");
   const [selectedIssue, setSelectedIssue] = useState<number | null>(null);
   const [votes, setVotes] = useState<
@@ -81,6 +80,9 @@ export const RoomPage = () => {
       if (findUser && findUser.vote) {
         setSelectedCard(findUser.vote);
       }
+      console.log(response);
+      
+      setSelectedIssue(response.selectedIssueIid);
       setRoomName(response.name);
       setOwnerId(response.ownerId);
     };
@@ -141,6 +143,14 @@ export const RoomPage = () => {
         setInformGitlab(res.informGitlab);
         toast.success("Lista de issues actualizada");
       }
+    });
+
+    socket.on("updateSelectedIssue", (res) => {
+      setSelectedIssue(res.selectedIssueIid);
+    });
+
+    socket.on("roomRemoved", () => {
+      navigate("/");
     });
 
     return () => {
@@ -223,6 +233,11 @@ export const RoomPage = () => {
     [roomId, selectedIssue, informGitlab?.issues, user, isOwner, onResetVotes]
   );
 
+  const handleSelectedIssue = useCallback((issueIid: number) => {
+    setSelectedIssue(issueIid);
+    socket.emit("setSelectedIssue", { roomId, issueIid });
+  }, [roomId]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-7xl mx-auto">
@@ -240,6 +255,11 @@ export const RoomPage = () => {
                 <Users className="w-4 h-4" />
                 {users.length} participantes
               </Badge>
+              {isOwner && 
+                <Button title="Cerrar Sala" variant="ghost" onClick={() => socket.emit("closeRoom", { roomId })}>
+                  <LogOut className="w-4 h-4 text-red-700" />
+                </Button>
+              }
             </div>
           </div>
         </div>
@@ -268,9 +288,11 @@ export const RoomPage = () => {
                         onClick={(e) => {
                           e.stopPropagation();
                           e.preventDefault();
-                          if (isOwner) setSelectedIssue(issue.iid);
+                          if (isOwner) {
+                            handleSelectedIssue(issue.iid);
+                          }
                         }}
-                        className={`col-span-12 flex items-center gap-2 p-2 w-[95%] rounded-md cursor-pointer ${
+                        className={`col-span-12 flex items-center gap-2 p-2 rounded-md cursor-pointer ${
                           selectedIssue === issue.iid
                             ? "bg-slate-500 text-white"
                             : ""
