@@ -91,12 +91,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const userData = await userResponse.json();
       setUser({...userData, accessToken: access_token});
-      localStorage.setItem('gitlab_user', JSON.stringify(userData));
+      localStorage.setItem('gitlab_user', JSON.stringify({...userData, accessToken: access_token}));
     } catch (error) {
       console.error('Error en la autenticación:', error);
       throw error;
     }
   };
+
+  useEffect(() => {
+    if (!user) {
+      const userData = localStorage.getItem('gitlab_user');
+      if (userData) {
+        setUser(JSON.parse(userData));
+      }
+    }
+  }, [user]);
 
   return (
     <AuthContext.Provider value={{ user, isLoading, login, logout, exchangeCodeForToken }}>

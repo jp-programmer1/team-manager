@@ -1,11 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  useEffect,
-  useState,
-  useCallback,
-  useMemo,
-  type FormEvent,
-} from "react";
+import { ExternalLink } from "lucide-react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { api, socket } from "../../services/api";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +18,13 @@ import {
 import type { User } from "@/types/user.type";
 import { useAuth } from "@/context/auth-context";
 import { ModalGitlabIterations } from "./modal-gitlab-iterations";
-import type { Gitlab, GitlabIssues, GitlabIteration } from "@/types/gitlab.type";
+import type {
+  Gitlab,
+  GitlabIssues,
+  GitlabIteration,
+} from "@/types/gitlab.type";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 
 const fibonacciCards = ["1", "2", "3", "5", "8", "13"];
 
@@ -31,13 +32,16 @@ export const RoomPage = () => {
   const { roomId } = useParams<{ roomId: string; roomName: string }>();
   const navigate = useNavigate();
   const [users, setUsers] = useState<Array<User>>([]);
-  const [iteration, setIteration] = useState<Gitlab | null>(null);
+  const [informGitlab, setInformGitlab] = useState<Gitlab | null>(null);
+  console.log(informGitlab);
   const [selectedCard, setSelectedCard] = useState<string | null>("");
+  const [selectedIssue, setSelectedIssue] = useState<number | null>(null);
   const [votes, setVotes] = useState<
     { data: string[]; sum: number } | undefined
   >();
   const [ownerId, setOwnerId] = useState();
-  const [roomName, setRoomName] = useState();  
+  const [roomName, setRoomName] = useState();
+  const [weight, setWeight] = useState<number | null>(null);
   const { user } = useAuth();
   const userId = user?.id;
   const username = user?.name;
@@ -58,12 +62,14 @@ export const RoomPage = () => {
 
     const getRoom = async () => {
       const response = await api.getRoom(roomId);
-      console.log(response);
-      
       if (response?.error) {
         navigate("/");
         return;
       }
+      if (response?.informGitlab) {
+        setInformGitlab(response.informGitlab);
+      }
+
       const findUser = response.users.find(
         (user: { id: number }) => user.id === userId
       );
@@ -88,8 +94,6 @@ export const RoomPage = () => {
     });
 
     socket.on("userVoted", (vote) => {
-      console.log(vote);
-      
       setUsers((current) => {
         return current.map((c) => {
           if (c.id === vote.userId) {
@@ -128,10 +132,11 @@ export const RoomPage = () => {
     });
 
     socket.on("updateInformGitlab", (res) => {
-      console.log(res);
-      
-
-    })
+      if (res.informGitlab) {
+        setInformGitlab(res.informGitlab);
+        toast.success("Lista de issues actualizada");
+      }
+    });
 
     return () => {
       socket.off("userJoined");
@@ -153,29 +158,65 @@ export const RoomPage = () => {
     socket.emit("revealVotes", { roomId });
   }, [votes, roomId]);
 
-  const onResetVotes = useCallback(
-    (e: FormEvent) => {
-      e.preventDefault();
-      socket.emit("resetVotes", { roomId });
+  const onResetVotes = useCallback(() => {
+    socket.emit("resetVotes", { roomId });
+  }, [roomId]);
+
+  const onFinishedConnectGitlab = useCallback(
+    (iteration: GitlabIteration, issues: GitlabIssues[]) => {
+      socket.emit("informGitlab", {
+        roomId,
+        iteration,
+        issues: issues.map(
+          ({
+            created_at,
+            description,
+            iid,
+            title,
+            updated_at,
+            web_url,
+            weight,
+            project_id,
+          }) => ({
+            created_at,
+            description,
+            iid,
+            title,
+            updated_at,
+            web_url,
+            weight,
+            project_id,
+          })
+        ),
+      });
     },
     [roomId]
   );
 
-  const onFinishedConnectGitlab = useCallback((iteration: GitlabIteration, issues: GitlabIssues[]) => {
-    socket.emit("informGitlab", { 
-      roomId, 
-      iteration, 
-      issues: issues.map(({created_at, description, iid, title, updated_at, web_url, weight}) => ({
-        created_at,
-        description,
-        iid,
-        title,
-        updated_at,
-        web_url,
-        weight,
-      }))
-    });
-  }, [roomId]);
+  const onSetWeight = useCallback(
+    async (value: number) => {
+      if (!selectedIssue || !user || !isOwner) return;
+      const project_id = informGitlab?.issues.find(
+        (issue) => issue.iid === selectedIssue
+      )?.project_id;
+      const res = await api.updateWeight(
+        user.accessToken,
+        project_id!,
+        selectedIssue,
+        value
+      );
+
+      if (res) {
+        socket.emit("setWeight", {
+          roomId,
+          issueIid: selectedIssue,
+          weight: value,
+        });
+        onResetVotes();
+      }
+    },
+    [roomId, selectedIssue, informGitlab?.issues, user, isOwner, onResetVotes]
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -187,9 +228,7 @@ export const RoomPage = () => {
               <h1 className="text-3xl font-bold text-gray-900">
                 Sala de Planning Poker
               </h1>
-              <p className="text-gray-600">
-                {roomName}
-              </p>
+              <p className="text-gray-600">{roomName}</p>
             </div>
             <div className="flex items-center gap-4">
               <Badge variant="secondary" className="flex items-center gap-2">
@@ -202,8 +241,61 @@ export const RoomPage = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Historia actual */}
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-3 space-y-2">
             {/* Cartas de votación */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-4 h-[20px]">
+                  {`Iteración #${informGitlab?.iteration.iid}`}
+                  {selectedCard && (
+                    <Badge variant="secondary">
+                      Seleccionada:{" "}
+                      {selectedCard === "120" ? "Pasar Turno" : selectedCard}
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-12 max-h-80 overflow-y-auto">
+                  {informGitlab?.issues
+                    ?.filter((issue) => !issue.weight)
+                    .map((issue) => (
+                      <div
+                        key={issue.iid}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          if (isOwner) setSelectedIssue(issue.iid);
+                        }}
+                        className={`col-span-12 flex items-center gap-2 p-2 w-[95%] rounded-md cursor-pointer ${
+                          selectedIssue === issue.iid
+                            ? "bg-slate-500 text-white"
+                            : ""
+                        }`}
+                      >
+                        <span className="font-bold">#{issue.iid}</span>
+                        <span className="flex-1 truncate" title={issue.title}>
+                          {issue.title}
+                        </span>
+                        <ExternalLink
+                          className={`h-4 w-4 cursor-pointer flex-shrink-0 text-muted-foreground hover:text-foreground ${
+                            selectedIssue === issue.iid ? "text-white" : ""
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(
+                              issue.web_url,
+                              "_blank",
+                              "noopener,noreferrer"
+                            );
+                          }}
+                        />
+                      </div>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-4 h-[20px]">
@@ -272,6 +364,25 @@ export const RoomPage = () => {
                     <div className="text-xs text-gray-500 mt-2">
                       Votos: {votes.data.join(", ")}
                     </div>
+
+                    {isOwner && (
+                      <div>
+                        <div className="flex gap-2">
+                          <Input
+                            type="number"
+                            value={weight || votes?.sum}
+                            onChange={(e) => setWeight(Number(e.target.value))}
+                          />
+                          <Button
+                            onClick={() => {
+                              onSetWeight(weight || votes?.sum);
+                            }}
+                          >
+                            Asignar Puntaje
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -359,7 +470,11 @@ export const RoomPage = () => {
                   disabled={!isOwner}
                   variant="outline"
                   className="w-full flex items-center gap-2"
-                  onClick={onResetVotes}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onResetVotes();
+                  }}
                 >
                   <RotateCcw className="w-4 h-4" />
                   Nueva ronda
@@ -380,10 +495,10 @@ export const RoomPage = () => {
           </div>
         </div>
       </div>
-      <ModalGitlabIterations 
-        isOpen={!iteration && isOwner}
+      <ModalGitlabIterations
+        isOpen={!informGitlab && isOwner}
         onClose={() => {
-          setIteration({
+          setInformGitlab({
             iteration: {
               id: "",
               iid: 0,

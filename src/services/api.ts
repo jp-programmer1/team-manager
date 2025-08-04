@@ -91,4 +91,31 @@ export const api = {
       throw error;
     }
   },
+
+  updateWeight: async (accessToken: string, project_id: number, issueIid: number, weight: number) => {
+    const url = `https://gitlab.com/api/v4/projects/${project_id}/issues/${issueIid}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ weight }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("❌ Error al actualizar weight:", response.status, errorData);
+        throw new Error(`Error ${response.status}`);
+      }
+
+      const issue = await response.json();
+      return issue;
+    } catch (error) {
+      console.error('Error al actualizar weight:', error);
+      throw error;
+    }
+  },
 };

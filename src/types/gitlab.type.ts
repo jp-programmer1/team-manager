@@ -20,6 +20,7 @@ export interface GitlabIssues {
   description: string | null;
   created_at: string;
   updated_at: string;
+  project_id: number;
 }
 
 export interface Gitlab {
