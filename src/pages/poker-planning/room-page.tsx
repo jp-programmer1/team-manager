@@ -210,10 +210,15 @@ export const RoomPage = () => {
 
   const onSetWeight = useCallback(
     async (value: number) => {
-      if (!selectedIssue || !user || !isOwner) return;
+      if (!selectedIssue || !user || !isOwner) {
+        console.log("No se pudo asignar el puntaje :c", user, selectedIssue, isOwner);
+        return
+      };
+
       const project_id = informGitlab?.issues.find(
         (issue) => issue.iid === selectedIssue
       )?.project_id;
+
       const res = await api.updateWeight(
         user.accessToken,
         project_id!,
