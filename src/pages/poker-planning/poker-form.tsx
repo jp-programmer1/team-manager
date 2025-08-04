@@ -25,7 +25,27 @@ export const PokerForm = ({ isOpen, onClose, mode }: PokerFormProps) => {
   const [roomId, setRoomId] = React.useState("");
   const navigate = useNavigate();
 
-  const onJoinRoom = useCallback(() => {}, [roomId]);
+  const onJoinRoom = useCallback(async () => {
+    if (!user) {
+      toast.error("No se pudo unirse a la sala :c");
+      return;
+    }
+    const res = await api.joinRoom(roomId, user?.name, user?.id);
+    if (!res.id) {
+      toast.error("No se pudo unirse a la sala :c");
+      return;
+    }
+
+    navigate(`/room/${res.id}`, {
+      state: {
+        roomName,
+        userId: user?.id,
+        userName: user?.name,
+      },
+    });
+
+
+  }, [roomId, user, roomName, navigate]);
 
   const onCreateRoom = useCallback(async () => {
     if (!user) {

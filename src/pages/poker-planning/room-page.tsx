@@ -73,6 +73,11 @@ export const RoomPage = () => {
       const findUser = response.users.find(
         (user: { id: number }) => user.id === userId
       );
+
+      if (!findUser) {
+        navigate("/");
+        return;
+      }
       if (findUser && findUser.vote) {
         setSelectedCard(findUser.vote);
       }
@@ -240,13 +245,11 @@ export const RoomPage = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Historia actual */}
           <div className="lg:col-span-3 space-y-2">
-            {/* Cartas de votación */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-4 h-[20px]">
-                  {`Iteración #${informGitlab?.iteration.iid}`}
+                  {`Iteración #${informGitlab?.iteration.iid || ""}`}
                   {selectedCard && (
                     <Badge variant="secondary">
                       Seleccionada:{" "}
