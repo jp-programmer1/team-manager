@@ -99,7 +99,7 @@ export const PokerForm = ({ isOpen, onClose, mode }: PokerFormProps) => {
                   ? "Ingresa el nombre de la sala"
                   : "Ingresa el ID de la sala"
               }
-              value={roomName}
+              value={mode === "create" ? roomName : roomId}
               onChange={(e) => {
                 if (mode === "create") {
                   setRoomName(e.target.value);
