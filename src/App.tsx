@@ -1,10 +1,20 @@
-import { useContext } from 'react';
-import { AuthProvider, AuthContext, type AuthContextType } from './context/auth-context';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { DashboardPage } from './pages/dashboard-page';
-import { GitLabCallback } from './components/auth/GitLabCallback';
-import { RoomPage } from './pages/poker-planning/room-page';
-import { LoginPage } from './pages/login-page';
+import { useContext } from "react";
+import {
+  AuthProvider,
+  AuthContext,
+  type AuthContextType,
+} from "./context/auth-context";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import { DashboardPage } from "./pages/dashboard-page";
+import { GitLabCallback } from "./components/auth/GitLabCallback";
+import { RoomPage } from "./pages/poker-planning/room-page";
+import { LoginPage } from "./pages/login-page";
+import { DiffPage } from "./pages/diff/diff-page";
 
 // Componente de ruta protegida
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -48,6 +58,14 @@ const App = () => {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/diff/:roomId"
+            element={
+              <ProtectedRoute>
+                <DiffPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
@@ -58,7 +76,7 @@ const App = () => {
 function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context as AuthContextType;
 }

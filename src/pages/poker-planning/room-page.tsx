@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import JSConfetti from "js-confetti";
 import {
   Users,
   Eye,
@@ -25,6 +26,7 @@ import type {
 } from "@/types/gitlab.type";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+const jsConfetti = new JSConfetti();
 
 const fibonacciCards = ["1", "2", "3", "5", "8", "13"];
 
@@ -74,14 +76,18 @@ export const RoomPage = () => {
       );
 
       if (!findUser) {
-        navigate("/");
+        api.joinRoom(roomId, username!, userId!).then((res) => {
+          if (!res.id) {
+            navigate("/");
+            return;
+          }
+          window.location.reload();
+        });
         return;
       }
       if (findUser && findUser.vote) {
         setSelectedCard(findUser.vote);
       }
-      console.log(response);
-      
       setSelectedIssue(response.selectedIssueIid);
       setRoomName(response.name);
       setOwnerId(response.ownerId);
@@ -115,16 +121,19 @@ export const RoomPage = () => {
       const data = res.users
         .filter((r: { vote: string }) => r.vote !== "120")
         ?.map((r: { vote: unknown }) => r.vote);
-      const sum = data.reduce(
-        (acc: number, vote: string) => acc + Number(vote),
-        0
-      );
-      setVotes({
+
+      const sum = data?.length
+        ? data.reduce((acc: number, vote: string) => acc + Number(vote), 0)
+        : 0;
+
+      const dataVotes = {
         data,
         sum: Number.isNaN(sum / data.length)
           ? 0
           : Number((sum / data.length).toFixed(2)),
-      });
+      };
+      setVotes(dataVotes);
+      jsConfetti.addConfetti();
     });
 
     socket.on("votesReset", () => {
@@ -211,9 +220,14 @@ export const RoomPage = () => {
   const onSetWeight = useCallback(
     async (value: number) => {
       if (!selectedIssue || !user || !isOwner) {
-        console.log("No se pudo asignar el puntaje :c", user, selectedIssue, isOwner);
-        return
-      };
+        console.log(
+          "No se pudo asignar el puntaje :c",
+          user,
+          selectedIssue,
+          isOwner
+        );
+        return;
+      }
 
       const project_id = informGitlab?.issues.find(
         (issue) => issue.iid === selectedIssue
@@ -238,10 +252,13 @@ export const RoomPage = () => {
     [roomId, selectedIssue, informGitlab?.issues, user, isOwner, onResetVotes]
   );
 
-  const handleSelectedIssue = useCallback((issueIid: number) => {
-    setSelectedIssue(issueIid);
-    socket.emit("setSelectedIssue", { roomId, issueIid });
-  }, [roomId]);
+  const handleSelectedIssue = useCallback(
+    (issueIid: number) => {
+      setSelectedIssue(issueIid);
+      socket.emit("setSelectedIssue", { roomId, issueIid });
+    },
+    [roomId]
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -251,20 +268,23 @@ export const RoomPage = () => {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                Sala de Planning Poker
+                Sala: {roomName}
               </h1>
-              <p className="text-gray-600">{roomName}</p>
             </div>
             <div className="flex items-center gap-4">
               <Badge variant="secondary" className="flex items-center gap-2">
                 <Users className="w-4 h-4" />
                 {users.length} participantes
               </Badge>
-              {isOwner && 
-                <Button title="Cerrar Sala" variant="ghost" onClick={() => socket.emit("closeRoom", { roomId })}>
+              {isOwner && (
+                <Button
+                  title="Cerrar Sala"
+                  variant="ghost"
+                  onClick={() => socket.emit("closeRoom", { roomId })}
+                >
                   <LogOut className="w-4 h-4 text-red-700" />
                 </Button>
-              }
+              )}
             </div>
           </div>
         </div>
@@ -406,6 +426,7 @@ export const RoomPage = () => {
                           <Button
                             onClick={() => {
                               onSetWeight(weight || votes?.sum);
+                              setWeight(null);
                             }}
                           >
                             Asignar Puntaje
