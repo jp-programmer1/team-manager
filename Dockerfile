@@ -1,23 +1,26 @@
-# Imagen base
 FROM node:20
 
-# Directorio de trabajo
 WORKDIR /app
 
-# Copiamos package.json y package-lock.json
 COPY package*.json ./
 
-# Instalamos dependencias forzando npm install -f
 RUN npm install -f
 
-# Copiamos el resto del proyecto
 COPY . .
 
-# Build (opcional, si tu app lo requiere)
+# Pasar variables en tiempo de build
+ARG VITE_API_URL
+ARG VITE_GITLAB_CLIENT_SECRET
+ARG VITE_GITLAB_CLIENT_ID
+ARG VITE_REDIRECT_URI
+
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_GITLAB_CLIENT_SECRET=$VITE_GITLAB_CLIENT_SECRET
+ENV VITE_GITLAB_CLIENT_ID=$VITE_GITLAB_CLIENT_ID
+ENV VITE_REDIRECT_URI=$VITE_REDIRECT_URI
+
 RUN npm run build
 
-# Puerto (si es necesario para Railway)
 EXPOSE 3000
 
-# Comando de inicio
 CMD ["npm", "run", "preview"]
