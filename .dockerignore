@@ -1,0 +1,40 @@
+# Dependencias locales (no las copies)
+node_modules
+
+# Logs
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Builds locales
+dist
+build
+.out
+.next
+.astro
+.vite
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Editor configs
+.vscode
+.idea
+*.swp
+
+# Env files (se pasan vía Railway Variables)
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Docker
+Dockerfile
+docker-compose.yml
