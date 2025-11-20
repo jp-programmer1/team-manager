@@ -14,10 +14,10 @@ RUN npm install -f
 COPY . .
 
 # Build (opcional, si tu app lo requiere)
-# RUN npm run build
+RUN npm run build
 
 # Puerto (si es necesario para Railway)
 EXPOSE 3000
 
 # Comando de inicio
-CMD ["npm", "start"]
+CMD ["npm", "run", "preview"]
