@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/context/auth-context";
 import { api, socketDiff } from "@/services/api";
 import { LogOut, Users } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import DiffViewer from "react-diff-viewer-continued";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -91,13 +91,18 @@ export const DiffPage = () => {
     };
   }, []);
 
-  const handleChangeText = useCallback(
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const emitText = useCallback(
     (text: string, type: string) => {
-      socketDiff.emit("setText", {
-        roomId,
-        type,
-        text,
-      });
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = setTimeout(() => {
+        socketDiff.emit("setText", {
+          roomId,
+          type,
+          text,
+        });
+      }, 300);
     },
     [roomId],
   );
@@ -167,7 +172,8 @@ export const DiffPage = () => {
                   className="w-full  bg-gradient-to-br h-[calc(100%-30px)] p-2 font-mono text-sm border rounded-md focus:outline-none focus:ring-1 focus:ring-gray-200"
                   value={textOriginal}
                   onChange={(e) => {
-                    handleChangeText(e.target.value, "original");
+                    setTextOriginal(e.target.value);
+                    emitText(e.target.value, "original");
                   }}
                   spellCheck={false}
                 />
@@ -183,7 +189,8 @@ export const DiffPage = () => {
                   className="w-full  bg-gradient-to-br h-[calc(100%-30px)] p-2 font-mono text-sm border rounded-md focus:outline-none focus:ring-1 focus:ring-gray-200"
                   value={textModified}
                   onChange={(e) => {
-                    handleChangeText(e.target.value, "modified");
+                    setTextModified(e.target.value);
+                    emitText(e.target.value, "modified");
                   }}
                   spellCheck={false}
                 />
