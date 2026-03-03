@@ -1,28 +1,128 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/context/auth-context";
+import { api, socketDiff } from "@/services/api";
 import { LogOut, Users } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import DiffViewer from "react-diff-viewer-continued";
+import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 
-const users = [];
-const isOwner = true;
+type RoomUser = {
+  id: number;
+  username: string;
+};
+
+type RoomDiff = {
+  id: string;
+  nanoId: string;
+  name: string;
+  users: RoomUser[];
+  textOriginal: string;
+  textModified: string;
+  ownerId: number;
+  createdAt: string;
+};
 
 export const DiffPage = () => {
-  // const [room, setRoom] = useState();
-
-
-  const [leftText, setLeftText] = useState(
-    '{\n  "name": "John",\n  "age": 30,\n  "city": "New York"\n}'
-  );
-  const [rightText, setRightText] = useState(
-    '{\n  "name": "John Doe",\n  "age": 31,\n  "city": "New York",\n  "country": "USA"\n}'
-  );
+  const { roomId } = useParams<{ roomId: string; roomName: string }>();
+  const navigate = useNavigate();
+  const [room, setRoom] = useState<RoomDiff | undefined>();
+  const [error, setError] = useState<string>();
+  
+  const [isOwner, setIsOwner] = useState(false);
+  const [textOriginal, setTextOriginal] = useState("");
+  const [textModified, setTextModified] = useState("");
   const [splitView, setSplitView] = useState(true);
   const [showDiffOnly, setShowDiffOnly] = useState(false);
 
+  const { user } = useAuth();
+  const userId = user?.id;
 
+  useEffect(() => {
+    if (!roomId) return;
+    api.getRoom(roomId, true).then((res) => {
+      if (res.statusCode === 500) {
+        setError('Sala no encontrada');
+        return;
+      }
+      setIsOwner(res.ownerId === userId);
+      setRoom(res);
+      setTextOriginal(res.textOriginal);
+      setTextModified(res.textModified);
+    })
+    socketDiff.emit("joinDiffRoom", {
+      roomId,
+      username: user?.username,
+      userId,
+    });
+  }, [roomId]);
 
+  useEffect(() => {
+    socketDiff.on("diffUsers", (userList) => {
+      setRoom((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          users: userList,
+        };
+      });
+    });
+    socketDiff.on("textUpdated", (textUpdated) => {
+      if (textUpdated.type === "original") {
+        setTextOriginal(textUpdated.textOriginal);
+      }
+      if (textUpdated.type === "modified") {
+        setTextModified(textUpdated.textModified);
+      }
+    });
+    socketDiff.on("roomDeleted", () => {
+      toast.info("Sala Eliminada, redirigiendo...")
+      setTimeout(() => {
+        navigate("/");
+      }, 2000)
+    });
+
+    return () => {
+      socketDiff.off("diffUsers");
+      socketDiff.off("textUpdated");
+      socketDiff.off("roomDeleted");
+    };
+  }, []);
+
+  const handleChangeText = useCallback(
+    (text: string, type: string) => {
+      socketDiff.emit("setText", {
+        roomId,
+        type,
+        text,
+      });
+    },
+    [roomId],
+  );
+
+  const roomLogout = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      socketDiff.emit("removeRoom", { roomId });
+    },
+    [roomId],
+  );
+
+  if (error) {
+      <div className="h-screen bg-gradient-to-br justify-center items-center flex from-blue-50 to-indigo-100 p-4">
+        <p>{error}</p>
+      </div>
+  }
+  if (!room || error) {
+    return (
+      <div className="h-screen bg-gradient-to-br justify-center items-center flex from-blue-50 to-indigo-100 p-4">
+        <p>{error ? error : 'Loading...'}</p>
+      </div>
+    )
+  }
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-7xl mx-auto">
@@ -38,10 +138,14 @@ export const DiffPage = () => {
             <div className="flex items-center gap-4">
               <Badge variant="secondary" className="flex items-center gap-2">
                 <Users className="w-4 h-4" />
-                {users.length} participantes
+                {room?.users?.length} participantes
               </Badge>
               {isOwner && (
-                <Button title="Cerrar Sala" variant="ghost" onClick={() => {}}>
+                <Button
+                  title="Cerrar Sala"
+                  variant="ghost"
+                  onClick={roomLogout}
+                >
                   <LogOut className="w-4 h-4 text-red-700" />
                 </Button>
               )}
@@ -61,8 +165,10 @@ export const DiffPage = () => {
                 </div>
                 <textarea
                   className="w-full  bg-gradient-to-br h-[calc(100%-30px)] p-2 font-mono text-sm border rounded-md focus:outline-none focus:ring-1 focus:ring-gray-200"
-                  value={leftText}
-                  onChange={(e) => setLeftText(e.target.value)}
+                  value={textOriginal}
+                  onChange={(e) => {
+                    handleChangeText(e.target.value, "original");
+                  }}
                   spellCheck={false}
                 />
               </div>
@@ -75,8 +181,10 @@ export const DiffPage = () => {
                 </div>
                 <textarea
                   className="w-full  bg-gradient-to-br h-[calc(100%-30px)] p-2 font-mono text-sm border rounded-md focus:outline-none focus:ring-1 focus:ring-gray-200"
-                  value={rightText}
-                  onChange={(e) => setRightText(e.target.value)}
+                  value={textModified}
+                  onChange={(e) => {
+                    handleChangeText(e.target.value, "modified");
+                  }}
                   spellCheck={false}
                 />
               </div>
@@ -111,8 +219,8 @@ export const DiffPage = () => {
             </div>
             <div className="h-[500px] overflow-auto">
               <DiffViewer
-                oldValue={leftText}
-                newValue={rightText}
+                oldValue={textOriginal}
+                newValue={textModified}
                 splitView={splitView}
                 useDarkTheme={false}
                 showDiffOnly={showDiffOnly}

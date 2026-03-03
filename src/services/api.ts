@@ -8,12 +8,21 @@ export const socket = io(`${API_URL}/poker`, {
   withCredentials: true,
 });
 
+export const socketDiff = io(`${API_URL}/diff`,{
+    transports: ["websocket"],
+  secure: true,
+  withCredentials: true,
+})
+
 export const api = {
   createRoom: async (
     roomName: string,
-    { name, id }: { name: string; id: number }
+    { name, id }: { name: string; id: number },
+    isDiff?: boolean
   ) => {
-    const response = await fetch(`${API_URL}/rooms`, {
+    let url = `${API_URL}/rooms`
+    if (isDiff) url = `${API_URL}/diff/join`
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -22,9 +31,10 @@ export const api = {
     });
     return response.json();
   },
-
-  joinRoom: async (roomId: string, username: string, userId: number) => {
-    const response = await fetch(`${API_URL}/rooms/join`, {
+  joinRoom: async (roomId: string, username: string, userId: number, isDiff?: boolean) => {
+    let url = `${API_URL}/rooms/join`;
+    if (isDiff) url = `${API_URL}/diff/join`;
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -34,8 +44,10 @@ export const api = {
     return response.json();
   },
 
-  getRoom: async (roomId: string) => {
-    const response = await fetch(`${API_URL}/rooms/${roomId}`, {
+  getRoom: async (roomId: string, isDiff?:boolean) => {
+    let url = `${API_URL}/rooms/${roomId}`;
+    if (isDiff) url = `${API_URL}/diff/${roomId}`;
+    const response = await fetch(url, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",

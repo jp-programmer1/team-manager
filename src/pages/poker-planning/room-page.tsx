@@ -220,12 +220,6 @@ export const RoomPage = () => {
   const onSetWeight = useCallback(
     async (value: number) => {
       if (!selectedIssue || !user || !isOwner) {
-        console.log(
-          "No se pudo asignar el puntaje :c",
-          user,
-          selectedIssue,
-          isOwner
-        );
         return;
       }
 

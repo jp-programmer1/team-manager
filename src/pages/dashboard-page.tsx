@@ -3,10 +3,12 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/auth-context";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PokerForm } from "./poker-planning/poker-form";
+import { DiffForm } from "./diff/diff-form";
 
 export const DashboardPage = () => {
   const { user, logout } = useAuth();
   const [planningPokerMode, setPlanningPokerMode] = useState<string>("");
+  const [diffMode, setDiffMode] = useState<string>("");
 
   if (!user) {
     return null;
@@ -65,10 +67,10 @@ export const DashboardPage = () => {
 
           <div className="bg-slate-100 p-6 rounded-lg shadow mt-2">
             <h2 className="text-lg font-semibold mb-4">Diff</h2>
-            <Button variant="default" size="lg" className="mr-2">
+            <Button variant="default" size="lg" className="mr-2" onClick={() => setDiffMode("create")}>
               Crear diff
             </Button>
-            <Button variant="outline" size="lg" className="mr-2">
+            <Button variant="outline" size="lg" className="mr-2" onClick={() => setDiffMode("join")}>
               Unirse diff
             </Button>
           </div>
@@ -80,6 +82,12 @@ export const DashboardPage = () => {
         isOpen={planningPokerMode !== ""}
         onClose={() => setPlanningPokerMode("")}
         mode={planningPokerMode}
+      />
+
+      <DiffForm
+        isOpen={diffMode !== ""}
+        onClose={() => setDiffMode("")}
+        mode={diffMode}
       />
     </div>
   );

@@ -47,8 +47,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const exchangeCodeForToken = async (code: string) => {
-    console.log('Código de autorización recibido:', code);
-    
     try {
       const tokenUrl = 'https://gitlab.com/oauth/token';
       const params = new URLSearchParams();
@@ -57,9 +55,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       params.append('code', code);
       params.append('grant_type', 'authorization_code');
       params.append('redirect_uri', import.meta.env.VITE_REDIRECT_URI);
-
-      console.log('Solicitando token a:', tokenUrl);
-      console.log('Parámetros:', Object.fromEntries(params));
 
       const response = await fetch(tokenUrl, {
         method: 'POST',
