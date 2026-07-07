@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react-swc'
 export default defineConfig({
   plugins: [react()],
   preview: {
-    allowedHosts: ["team-manager-production-a807.up.railway.app"]
+    allowedHosts: ["team-manager-production-a9d8.up.railway.app"]
   },
   server: {
     watch: {
